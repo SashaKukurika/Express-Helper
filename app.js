@@ -73,3 +73,12 @@ fs.rmdir(path.resolve('folder', 'folder4'), err => {
     if (err) throw new Error(err.message);
 }) // видаляє дерикторію за шляхом
 
+// FS Promise
+
+const fs2 = require('node:fs/promises')
+
+async function makeDir() {
+    await fs2.mkdir(path.join(process.cwd(), 'baseFolder'))
+}
+
+makeDir()
