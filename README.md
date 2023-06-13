@@ -1,10 +1,13 @@
 // встановлення TS
+
 tsc -init
 
 // check version
+
 tsc -v
 
 // мої налаштування
+
 {
 "compilerOptions": {
 "module": "commonjs",
@@ -29,13 +32,16 @@ tsc -v
 
 
 npm i rimraf
+
 npm i tsc-watch
+
 npm i ts-node
 
 // в package.json вставляємо скріпти щоб вони відслідковували усі зміни в файлах
+
 "scripts": {
-"start": "rimraf dist && tsc-watch --onSuccess 'npm run watch'",
-"watch": "nodemon 'src/app.ts' --watch './src'"
+"start": "rimraf dist && tsc-watch --onSuccess \"npm run watch\"",
+"watch": "nodemon \"src/app.ts\" --watch \"./src\""
 },
 
 // щоб попередні скріпти працювали, дивиться на зміни в файлах 
@@ -47,6 +53,7 @@ npm i nodemon
 npm install --save-dev @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint typescript
 
 .eslintrc.js
+
 // в цьому файлі прописуємо
 
 module.exports = {
@@ -96,7 +103,9 @@ ignorePatterns: ['.eslintrc.js']
 };
 
 npm i eslint-plugin-prettier
+
 npm i eslint-config-prettier
+
 npm i eslint-plugin-import
 
 // в налаштуваннях eslint і включити автоматично
