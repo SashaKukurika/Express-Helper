@@ -1,114 +1,95 @@
-// встановлення TS
+npm i mongoose
 
-tsc -init
+// дивитись в терміналі чи порт зайнятий, замість 80 номер порта
 
-// check version
+netstat -ano | findstr 80
 
-tsc -v
+app.listen(PORT, () => {
 
-// мої налаштування
+// підключаємо mongoose, також можна ввести mongodb://localhost:27017/dec-2022 або mongodb://127.0.0.1:27017/dec-2022 
 
-{
-"compilerOptions": {
-"module": "commonjs",
-"declaration": true,
-"removeComments": true,
-"emitDecoratorMetadata": true,
-"experimentalDecorators": true,
-"allowSyntheticDefaultImports": true,
-"target": "ES2020",
-"sourceMap": true,
-"outDir": "./dist",
-"baseUrl": "./",
-"incremental": true,
-"skipLibCheck": true,
-"strictNullChecks": false,
-"noImplicitAny": false,
-"strictBindCallApply": false,
-"forceConsistentCasingInFileNames": false,
-"noFallthroughCasesInSwitch": false
-}
-}
+mongoose.connect("mongodb+srv://gydini13:<password>@mongodb1.grht4ea.mongodb.net/");
+});
 
+npm i dotenv
 
-npm i rimraf
+// вчить ноду читати .env файли, щоб видягувати дані в конфіги
 
-npm i tsc-watch
+// в папці configs в configs.ts
 
-npm i ts-node
+import { config } from "dotenv";
 
-// в package.json вставляємо скріпти щоб вони відслідковували усі зміни в файлах
+config();
 
-"scripts": {
-"start": "rimraf dist && tsc-watch --onSuccess \"npm run watch\"",
-"watch": "nodemon \"src/app.ts\" --watch \"./src\""
-},
-
-// щоб попередні скріпти працювали, дивиться на зміни в файлах 
-npm i nodemon
-
-
-// ESLINT https://typescript-eslint.io/getting-started
-
-npm install --save-dev @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint typescript
-
-.eslintrc.js
-
-// в цьому файлі прописуємо
-
-module.exports = {
-parser: '@typescript-eslint/parser',
-parserOptions: {
-project: 'tsconfig.json',
-sourceType: 'module',
-},
-plugins: [
-'@typescript-eslint/eslint-plugin',
-'simple-import-sort',
-'import',
-],
-extends: [
-'plugin:prettier/recommended',
-'plugin:@typescript-eslint/eslint-recommended',
-'plugin:@typescript-eslint/recommended',
-'prettier',
-],
-root: true,
-env: {
-node: true,
-jest: true,
-},
-rules: {
-'@typescript-eslint/no-unused-vars': ['error', {
-argsIgnorePattern: 'req|res|next'
-}],
-'@typescript-eslint/interface-name-prefix': 'off',
-'@typescript-eslint/explicit-function-return-type': 'off',
-'@typescript-eslint/explicit-module-boundary-types': 'off',
-'@typescript-eslint/no-explicit-any': 'off',
-"simple-import-sort/imports": "error",
-"import/first": "error",
-"import/newline-after-import": ["error", { "count": 1 }],
-"import/no-duplicates": "error",
-'no-console': 'warn',
-'sort-imports': ['error', {
-'ignoreCase': true,
-'ignoreDeclarationSort': true,
-'ignoreMemberSort': false,
-'memberSyntaxSortOrder': ['none', 'all', 'multiple', 'single'],
-'allowSeparatedGroups': false
-}],
-},
-ignorePatterns: ['.eslintrc.js']
+export const configs = {
+DB_PORT: process.env.DB_PORT || 5000,
+DB_URL: process.env.DB_URL,
 };
 
-npm i eslint-plugin-prettier
+// а в апп файлі
 
-npm i eslint-config-prettier
+import { configs } from "./configs/configs";
 
-npm i eslint-plugin-import
+app.listen(configs.DB_PORT, () => {
+mongoose.connect(configs.DB_URL);
+console.log(`Server has started on PORT ${configs.DB_PORT}`);
+});
 
-// в налаштуваннях eslint і включити автоматично
+// створюємо моделі
 
-// щоб сортувало імпорти
-npm i eslint-plugin-simple-import-sort
+import { model, Schema } from "mongoose";
+
+import { EGenders } from "../enums/user.enum";
+
+const userSchema = new Schema({
+name: {
+type: String,
+},
+age: {
+type: Number,
+min: [2, "Min age is 2"],
+max: [110, "Max age is 110"],
+},
+gender: {
+type: String,
+enum: EGenders,
+
+// EGenders це енамки з іншого файлу
+
+export enum EGenders {
+Male = "male",
+Female = "female",
+Other = "other",
+}
+
+},
+email: {
+type: String,
+require: true,
+trim: true,
+lowercase: true,
+},
+password: {
+type: String,
+require: true,
+},
+});
+
+export const User = model("user", userSchema);
+
+// далі щоб доступатися до бази
+
+await User.find()
+
+// створюємо інтерфейс для типізації респонсів
+
+import { Types } from "mongoose";
+
+export interface IUser {
+id: Types.ObjectId;
+name: string;
+age: number;
+email: string;
+password: string;
+gender: string;
+}

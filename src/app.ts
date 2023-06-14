@@ -1,83 +1,84 @@
 import express, { Request, Response } from "express"; // витягуємо і інсталимо
+import * as mongoose from "mongoose";
+
+import { configs } from "./configs/configs";
+import { User } from "./models/user.model";
+import { IUser } from "./types/user.type";
 
 const app = express(); // пишемо app для зручності використання в подальшому, вже як виклик функції
-
-const users = [
-  {
-    name: "Oleh",
-    age: 20,
-    gender: "male",
-  },
-  {
-    name: "Anton",
-    age: 10,
-    gender: "male",
-  },
-  {
-    name: "Inokentiy",
-    age: 25,
-    gender: "female",
-  },
-  {
-    name: "Anastasiya",
-    age: 15,
-    gender: "female",
-  },
-  {
-    name: "Cocos",
-    age: 25,
-    gender: "other",
-  },
-];
 
 app.use(express.json()); // ці два використовуються для того щоб наша апка могла читати body і квері
 app.use(express.urlencoded({ extended: true }));
 
 // CRUD - create, read, update, delete
 
-app.get("/users", (req: Request, res: Response) => {
-  res.status(200).json(users); // res це те що ми повертаємо клієнту
+app.get(
+  "/users",
+  async (req: Request, res: Response): Promise<Response<IUser[]>> => {
+    try {
+      const users = await User.find();
+
+      return res.json(users);
+    } catch (e) {
+      console.log(e);
+    }
+  }
+);
+
+app.get("/users/:id", async (req: Request, res: Response) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    res.status(200).json(user);
+  } catch (e) {}
 });
 
-app.get("/users/:id", (req: Request, res: Response) => {
-  const { id } = req.params; // req.params достаємо параметри з урли, а ось це :id і є параметри і вони завжди у
-  // вигляді стрічки
+app.post(
+  "/users",
+  async (req: Request, res: Response): Promise<Response<IUser>> => {
+    try {
+      const createdUser = await User.create(req.body);
 
-  res.status(200).json(users[+id]);
-});
+      return res.status(201).json(createdUser);
+    } catch (e) {
+      console.log(e);
+    }
+  }
+);
 
-app.post("/users", (req: Request, res: Response) => {
-  users.push(req.body); // req.body те що нам передає клієнт в body
+app.put(
+  "/users/:id",
+  async (req: Request, res: Response): Promise<Response<IUser>> => {
+    try {
+      const { id } = req.params;
 
-  res.status(201).json({
-    message: "User created.", // повідомлення яке отримає фронт/клієнт
-  });
-});
+      const updatedUser = await User.findOneAndUpdate(
+        // _id пишемо бо так в монгусі
+        { _id: id },
+        // другий параметр це те що ми оновлюємо саме
+        { ...req.body },
+        // покаже вже обєкт після оновлень а не до
+        { returnDocument: "after" }
+      );
+      return res.status(200).json(updatedUser);
+    } catch (e) {}
+  }
+);
 
-app.put("/users/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
+app.delete(
+  "/users/:id",
+  async (req: Request, res: Response): Promise<Response<void>> => {
+    try {
+      await User.deleteOne({ _id: req.params.id });
 
-  users[+id] = req.body;
+      return res.status(200);
+    } catch (e) {}
+  }
+);
 
-  res.status(200).json({
-    message: "User updated",
-    data: users[+id], // можемо передати обєкт
-  });
-});
-
-app.delete("/users/:id", (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  users.splice(+id, 1);
-
-  res.status(200).json({
-    message: "User deleted",
-  });
-});
-
-const PORT = 5001; // по дефолту наш локалхост це 127.0.0.1, а в поєднані з портом 127.0.0.1:5001, а ще далі
-// 127.0.0.1:5001/users
-
-app.listen(PORT, () => {
-  console.log(`Server has started on PORT ${PORT} 🥸`);
+app.listen(configs.DB_PORT, () => {
+  // підключаємо mongoose
+  // також можна ввести mongodb://localhost:27017/dec-2022 або mongodb://127.0.0.1:27017/dec-2022
+  mongoose.connect(configs.DB_URL);
+  console.log(`Server has started on PORT ${configs.DB_PORT}`);
 }); // буде слухати порт, топто івентлуп буде завжди працювати і чекати на нові реквести щоб їх обробити
