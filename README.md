@@ -1,100 +1,253 @@
-## JOI validator
+## Structure
 
-створюємо папку validators в src щоб зберігати у ній наші валідатори
-
-npm i joi
-
-далі в папці файл з назвою того що будемо валідувати user.validator.ts
+створюємо папку routers в src, в ній файл user.router.ts,
+але тепер замість того щоб писати у всіх роутах /users можна просто писати /
 ````
-import Joi from "joi";
+import { NextFunction, Request, Response, Router } from "express";
 
-import { regexConstants } from "../constants";
-import { EGenders } from "../enums/user.enum";
+import { ApiError } from "../errors";
+import { User } from "../models/User.model";
+import { IUser } from "../types/user.type";
+import { UserValidator } from "../validators";
 
-export class UserValidator {
-  static firstName = Joi.string().trim().min(3).max(30);
-  static age = Joi.number().min(1).max(199);
-  static gender = Joi.valid(...Object.values(EGenders));;
-  static email = Joi.string().regex(regexConstants.EMAIL).lowercase().trim();
-  static password = Joi.string().regex(regexConstants.PASSWORD);
+// викликаємо як функцію
+const router: Router = Router();
+// CRUD - create, read, update, delete
+router.get(
+  "/",
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<IUser[]>> => {
+    try {
+      const users = await User.find();
 
-  static create = Joi.object({
-    name: this.firstName.required(),
-    age: this.age.required(),
-    gender: this.gender.required(),
-    email: this.email.required(),
-    password: this.password.required(),
-  });
-  static update = Joi.object({
-    name: this.firstName,
-    age: this.age,
-    gender: this.gender,
-  });
-}
+      return res.json(users);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
 
-````
-
-для збереження констант по типу регулярок, створюємо папку constants а в ній файл regex.constants.ts
-````
-export const regexConstants = {
-EMAIL: /^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/,
-PASSWORD: /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%_*#?&])[A-Za-z\d@$_!%*#?&]{8,}$/,
-};
-````
-тоді можемо викликати методи валідації в аппці
-````
-app.post(
-  "/users",
-  async (req: Request, res: Response): Promise<Response<IUser>> => {
+router.post(
+  "/",
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<IUser>> => {
     try {
       // викликаємо валідатор, передаємо що саме мусить валідуватись, і витягуємо ерорки і саме вже провалідоване
       // значення
       const { error, value } = UserValidator.create.validate(req.body);
       // якщо не пройшло валідацію кидаємо помилку
       if (error) {
-        throw new Error(error.message);
+        throw new ApiError(error.message, 400);
       }
       // якщо ж пройшло то ми передаємо вже провалідоване значення в базу для створення
       const createdUser = await User.create(value);
 
       return res.status(201).json(createdUser);
     } catch (e) {
-      console.log(e);
+      next(e);
     }
   }
 );
-````
-## Error handling
+router.get("/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await User.findById(req.params.id);
 
-створюємо папку errors, в ній файл api.error.ts
+    res.status(200).json(user);
+  } catch (e) {
+    next(e);
+  }
+});
+router.put(
+  "/:id",
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<IUser>> => {
+    try {
+      // викликаємо валідатор, передаємо що саме мусить валідуватись, і витягуємо ерорки і саме вже провалідоване
+      // значення
+      const { error, value } = UserValidator.create.validate(req.body);
+      // якщо не пройшло валідацію кидаємо помилку
+      if (error) {
+        throw new ApiError(error.message, 400);
+      }
+
+      const { id } = req.params;
+
+      const updatedUser = await User.findOneAndUpdate(
+        // _id пишемо бо так в монгусі
+        { _id: id },
+        // другий параметр це те що ми оновлюємо саме
+        { ...value },
+        // покаже вже обєкт після оновлень а не до
+        { returnDocument: "after" }
+      );
+      return res.status(200).json(updatedUser);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+router.delete(
+  "/:id",
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<void>> => {
+    try {
+      await User.deleteOne({ _id: req.params.id });
+
+      return res.status(200);
+    } catch (e) {
+      // це вказує що ерорку потрібно передати далі
+      next(e);
+    }
+  }
+);
+
+export const userRouter: Router = router;
 ````
-export class ApiError extends Error {
-  public status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
+а в аппці пишемо
+````
+// звертаємось до нашого роутера, щоб мати доступ до прописаних там ендпоінтів
+app.use("/users", userRouter);
+````
+створюємо папку controllers, а в ній файл user.controller.ts, тут прописуємо все те що раніше було просто в апці
+````
+import { NextFunction, Request, Response } from "express";
+
+import { ApiError } from "../errors";
+import { User } from "../models/User.model";
+import { IUser } from "../types/user.type";
+import { UserValidator } from "../validators";
+
+class UserController {
+  public async findAll(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<IUser[]>> {
+    try {
+      // select("-password") видасть відповідь але без пароля
+      const users = await User.find().select("-password");
+
+      return res.json(users);
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  public async create(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<IUser>> {
+    try {
+      // викликаємо валідатор, передаємо що саме мусить валідуватись, і витягуємо ерорки і саме вже провалідоване
+      // значення
+      const { error, value } = UserValidator.create.validate(req.body);
+      // якщо не пройшло валідацію кидаємо помилку
+      if (error) {
+        throw new ApiError(error.message, 400);
+      }
+      // якщо ж пройшло то ми передаємо вже провалідоване значення в базу для створення
+      const createdUser = await User.create(value);
+
+      return res.status(201).json(createdUser);
+    } catch (e) {
+      next(e);
+    }
   }
 }
+
+export const userController = new UserController();
 ````
-тоді можемо викликати їх в інших файлах
+а потім в роутерах викликаємо один з методів що нам потрібен
 ````
-throw new ApiError(error.message, 400);
+// викликаємо як функцію
+const router: Router = Router();
+// CRUD - create, read, update, delete
+
+router.get("/", userController.findAll);
+
+router.post("/", userController.create);
 ````
-щоб ловити помилки по всьому файлі, тоді потрібно в низу апп файлу прописуємо
+створюємо папку services, а в ній файл user.service.ts
 ````
-// тут ми відловлюємо усі ерорки що випали з роутів, обовязково має бути 4 аргументи в колбеці, бо саме коли їх
-// чотири то перша ерорка
-app.use((error: any, req: Request, res: Response, next: NextFunction) => {
-  // з ерорки дістаємо статус який ми передали, або 500 по дефолту якщо немає статуса
-  const status = error.status || 500;
-  // витягнули повідомлення і передали як респонс
-  return res.status(status).json(error.message);
-});
-````
-а щоб викидати їх з роутів
-````
-catch (e) {
-      // це вказує що ерорку потрібно передати далі
-      next(e);Q
+import { ApiError } from "../errors";
+import { User } from "../models/User.model";
+import { IUser } from "../types/user.type";
+
+class UserService {
+  public async findAll(): Promise<IUser | any> {
+    try {
+      return User.find().select("-password");
+    } catch (e) {
+      throw new ApiError(e.message, e.status);
     }
+  }
+}
+
+export const userService = new UserService();
+
 ````
+а тоді в котрлорелах вже звертаємось до наших сервісів
+````
+public async findAll(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<IUser[]>> {
+    try {
+                           // ось тут
+      const users = await userService.findAll();
+
+      return res.json(users);
+    } catch (e) {
+      next(e);
+    }
+  }
+  ````
+створюємо папку middleware, а в ній файл user.middleware.ts тут валідуються дані, 
+щоб потім передати їх в контролер
+````
+import { NextFunction, Request, Response } from "express";
+
+import { ApiError } from "../errors";
+import { UserValidator } from "../validators";
+
+class UserMiddleware {
+  public isCreateValid(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { error, value } = UserValidator.create.validate(req.body);
+      // якщо не пройшло валідацію кидаємо помилку
+      if (error) {
+        throw new ApiError(error.message, 400);
+      }
+      // для req.res який є обєктом створюємо нове значення locals в яке записуємо що захочемо в даному випадку value, щоб
+      // ми змогли це забрати в контролері!!!!!!
+      req.res.locals = value;
+
+      next();
+    } catch (e) {
+      console.log(e);
+    }
+  }
+}
+
+export const userMiddleware = new UserMiddleware();
+````
+в роутерах перед контролерами викликаємо нашу мідлвару, щоб вони отримали одразу валідні дані
+````
+router.post("/", userMiddleware.isCreateValid, userController.create);
+````
+є ще репозиторії які будуть робити лише!!! запити в базу

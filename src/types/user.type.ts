@@ -1,10 +1,12 @@
-import { Types } from "mongoose";
+import { Document } from "mongoose";
 
-export interface IUser {
-  id: Types.ObjectId;
-  name: string;
-  age: number;
+export interface IUser extends Document {
+  name?: string;
+  age?: number;
   email: string;
   password: string;
-  gender: string;
+  gender?: string;
 }
+
+// через Omit вказуємо що ми хочемо викинути з інтерфейсу IUser
+export type IUserWithoutPassword = Omit<IUser, "password">;
