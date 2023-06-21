@@ -1,19 +1,18 @@
 import { NextFunction, Request, Response } from "express";
 
 import { ApiError } from "../errors";
-import { UserValidator } from "../validators";
+import { User } from "../models/User.model";
 
 class UserMiddleware {
-  public isCreateValid(req: Request, res: Response, next: NextFunction) {
+  public async isExist(req: Request, res: Response, next: NextFunction) {
     try {
-      const { error, value } = UserValidator.create.validate(req.body);
-      // якщо не пройшло валідацію кидаємо помилку
-      if (error) {
-        throw new ApiError(error.message, 400);
+      const { userId } = req.params;
+
+      const user = await User.findById(userId);
+
+      if (!user) {
+        throw new ApiError("User not exist", 422);
       }
-      // для req.res який є обєктом створюємо нове значення locals в яке записуємо що захочемо в даному випадку value, щоб
-      // ми змогли це забрати в контролері
-      req.res.locals = value;
 
       next();
     } catch (e) {

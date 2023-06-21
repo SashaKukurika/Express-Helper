@@ -1,10 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 
-import { ApiError } from "../errors";
-import { User } from "../models/User.model";
 import { userService } from "../services/user.service";
 import { IUser } from "../types/user.type";
-import { UserValidator } from "../validators";
 
 class UserController {
   public async findAll(
@@ -28,7 +25,7 @@ class UserController {
   ): Promise<Response<IUser>> {
     try {
       // as IUser можна вказувати як що портібно валідувати по типізації
-      const createdUser = await userService.create(req.res.locals as IUser);
+      const createdUser = await userService.create(req.body);
 
       return res.status(201).json(createdUser);
     } catch (e) {
@@ -42,7 +39,8 @@ class UserController {
     next: NextFunction
   ): Promise<Response<IUser>> {
     try {
-      const user = await userService.findById(req.params.id);
+      const { userId } = req.params;
+      const user = await userService.findById(userId);
 
       return res.status(200).json(user);
     } catch (e) {
@@ -56,24 +54,10 @@ class UserController {
     next: NextFunction
   ): Promise<Response<IUser>> {
     try {
-      // викликаємо валідатор, передаємо що саме мусить валідуватись, і витягуємо ерорки і саме вже провалідоване
-      // значення
-      const { error, value } = UserValidator.create.validate(req.body);
-      // якщо не пройшло валідацію кидаємо помилку
-      if (error) {
-        throw new ApiError(error.message, 400);
-      }
+      const { userId } = req.params;
 
-      const { id } = req.params;
+      const updatedUser = await userService.updateById(userId, req.body);
 
-      const updatedUser = await User.findOneAndUpdate(
-        // _id пишемо бо так в монгусі
-        { _id: id },
-        // другий параметр це те що ми оновлюємо саме
-        { ...value },
-        // покаже вже обєкт після оновлень а не до
-        { returnDocument: "after" }
-      );
       return res.status(200).json(updatedUser);
     } catch (e) {
       next(e);
@@ -86,9 +70,11 @@ class UserController {
     next: NextFunction
   ): Promise<Response<void>> {
     try {
-      await User.deleteOne({ _id: req.params.id });
+      const { userId } = req.params;
 
-      return res.status(200);
+      await userService.deleteById(userId);
+
+      return res.sendStatus(204);
     } catch (e) {
       // це вказує що ерорку потрібно передати далі
       next(e);
