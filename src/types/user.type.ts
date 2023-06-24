@@ -10,3 +10,5 @@ export interface IUser extends Document {
 
 // через Omit вказуємо що ми хочемо викинути з інтерфейсу IUser
 export type IUserWithoutPassword = Omit<IUser, "password">;
+// через Pick вказуємо що ми хочемо взяти з інтерфейсу IUser
+export type ICreateUser = Pick<IUser, "password" | "email">;

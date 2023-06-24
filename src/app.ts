@@ -3,6 +3,7 @@ import * as mongoose from "mongoose";
 
 import { configs } from "./configs/configs";
 import { ApiError } from "./errors";
+import { authRouter } from "./routers/auth.router";
 import { userRouter } from "./routers/user.router";
 
 const app = express(); // пишемо app для зручності використання в подальшому, вже як виклик функції
@@ -12,6 +13,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // звертаємось до нашого роутера, щоб мати доступ до прописаних там ендпоінтів
 app.use("/users", userRouter);
+app.use("/auth", authRouter);
 
 // тут ми відловлюємо усі ерорки що випали з роутів, обовязково має бути 4 аргументи в колбеці, бо саме коли їх
 // чотири то перша ерорка

@@ -17,6 +17,10 @@ export class UserValidator {
     email: this.email.required(),
     password: this.password.required(),
   });
+  static register = Joi.object({
+    email: this.email.required(),
+    password: this.password.required(),
+  });
   static update = Joi.object({
     name: this.firstName,
     age: this.age,
