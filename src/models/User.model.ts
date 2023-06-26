@@ -26,7 +26,7 @@ const userSchema = new Schema(
       type: String,
       require: true,
       // таким чином не буде видаватися пароль при запитах до бази
-      select: false,
+      select: true,
     },
   },
   {
