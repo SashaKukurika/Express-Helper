@@ -1,8 +1,10 @@
+import { EEmailAction } from "../enums/email.enum";
 import { ApiError } from "../errors";
 import { Token } from "../models/Token.model";
 import { User } from "../models/User.model";
 import { ICredentials, ITokensPair } from "../types/token.type";
 import { ICreateUser, IUser } from "../types/user.type";
+import { emailService } from "./email.service";
 import { passwordService } from "./password.service";
 import { tokenService } from "./token.service";
 
@@ -11,11 +13,16 @@ class AuthService {
   // другому після коми
   public async register(data: ICreateUser): Promise<void> {
     try {
-      const { password } = data;
+      const { password, email } = data;
+
+      const name = "Sasha";
 
       const hashedPassword = await passwordService.hash(password);
 
       await User.create({ ...data, password: hashedPassword });
+
+      // name ключ по якому тягнемо дані в hbs
+      await emailService.sendMail(email, EEmailAction.WELCOME, { name });
     } catch (e) {
       throw new ApiError(e.message, e.status);
     }

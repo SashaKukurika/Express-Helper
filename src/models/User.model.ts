@@ -28,6 +28,10 @@ const userSchema = new Schema(
       // таким чином не буде видаватися пароль при запитах до бази
       select: true,
     },
+    isActivated: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     versionKey: false,
