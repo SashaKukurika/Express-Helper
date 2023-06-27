@@ -1,15 +1,13 @@
 import * as jwt from "jsonwebtoken";
-import { Types } from "mongoose";
 
 import { configs } from "../configs/configs";
-import { ITokensPair } from "../types/token.type";
+import { ApiError } from "../errors";
+import { ITokenPayload, ITokensPair } from "../types/token.type";
 
 class TokenService {
   // Record Створює тип об’єкта, ключі властивостей якого дорівнюють першому значенню до коми, а значення властивостей
   // другому після коми
-  public generateTokenPair(
-    payLoad: Record<string, string | number | Types.ObjectId>
-  ): ITokensPair {
+  public generateTokenPair(payLoad: ITokenPayload): ITokensPair {
     // sign просто генерує токен, приймає корисне навантаження (інфу що ми хочемо зашифрувати в токені, не
     // передавати важливу), та сикретне слово, і останє це опції, в даному випадку час життя токенів, секретне слово
     // обовязково виносити в .env
@@ -24,6 +22,13 @@ class TokenService {
       accessToken,
       refreshToken,
     };
+  }
+  public checkToken(token: string): ITokenPayload {
+    try {
+      return jwt.verify(token, configs.JWT_ACCESS_SECRET) as ITokenPayload;
+    } catch (e) {
+      throw new ApiError("Token not valid", 401);
+    }
   }
 }
 
