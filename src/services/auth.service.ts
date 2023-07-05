@@ -1,5 +1,9 @@
+import { Types } from "mongoose";
+
+import { EActionTokenType } from "../enums/action-token-type.enum";
 import { EEmailAction } from "../enums/email.enum";
 import { ApiError } from "../errors";
+import { Action } from "../models/Action.model";
 import { OldPassword } from "../models/OldPassword.model";
 import { Token } from "../models/Token.model";
 import { User } from "../models/User.model";
@@ -112,6 +116,46 @@ class AuthService {
         await OldPassword.create({ _userId: userId, password: user.password }),
         // оновлюємо пароль юзера
         await User.updateOne({ _id: userId }, { password: newHashPassword }),
+      ]);
+    } catch (e) {
+      throw new ApiError(e.message, e.status);
+    }
+  }
+  public async forgotPassword(
+    userId: Types.ObjectId,
+    email: string
+  ): Promise<void> {
+    try {
+      const actionToken = tokenService.generateActionToken(
+        { _id: userId },
+        EActionTokenType.Forgot
+      );
+
+      await Promise.all([
+        Action.create({
+          actionToken,
+          tokenType: EActionTokenType.Forgot,
+          _userId: userId,
+        }),
+        emailService.sendMail(email, EEmailAction.FORGOT_PASSWORD, {
+          actionToken,
+        }),
+      ]);
+    } catch (e) {
+      throw new ApiError(e.message, e.status);
+    }
+  }
+  public async setForgotPassword(
+    password: string,
+    userId: Types.ObjectId,
+    actionToken: string
+  ): Promise<void> {
+    try {
+      const hashedPassword = await passwordService.hash(password);
+
+      await Promise.all([
+        User.updateOne({ _id: userId }, { password: hashedPassword }),
+        Action.deleteOne({ actionToken }),
       ]);
     } catch (e) {
       throw new ApiError(e.message, e.status);

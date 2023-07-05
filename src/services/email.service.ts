@@ -10,6 +10,9 @@ class EmailService {
   private transporter;
   constructor() {
     this.transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
       // від кого приходить email
       from: "No reply",
       // який сервіс використовуємо для відправки
@@ -60,6 +63,8 @@ class EmailService {
   ) {
     // [] динамічно підставляємо
     const { templateName, subject } = allTemplates[emailAction];
+
+    context.frontUrl = configs.FRONT_URL;
 
     const mailOptions = {
       // to - кому ми хочемо відправити email
