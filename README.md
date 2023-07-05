@@ -1,23 +1,9 @@
 ### CheckRefreshToken
 
-npm i nodemailer
+на окремий роут створюємо перевірку рефреш токена, якщо він пройшов валідацію по сікрету, перевіряємо чи існує він у 
+нас в базі, потім передаємо його на контролер, де достаємо інфу по токенах і перекидаємо в аузсервіс, а там вже 
+генеруємо нову пару токерін, вносимо їх в базу перед тим видаляючи стару пару з бази.
 
-npm i @types/nodemailer
-
-email endings - види для створення html в emails
-
-npm i hbs
-
-hbs - handlebars для написання email в html форматі
-
-npm i nodemailer-express-handlebars - щоб подружити nodemailer з handlebars
-
-npm i @types/nodemailer-express-handlebars
-
-заходимо на пошту -> керування обліковим записом -> безпека -> двохетапна перевірка -> паролі додатків -> генеруємо 
-пароль
-
-створюємо папку email-templates, а в ній ще три
 auth.router.ts
 ````
 router.post(
