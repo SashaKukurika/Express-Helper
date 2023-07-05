@@ -1,125 +1,118 @@
-### CheckRefreshToken
+### Change Password
 
-npm i nodemailer
+для зміна пароля створюємо окремий ендпоінт, перевіряємо за допомогою валідатора чи паролі валідні (відповідають 
+вимогам) і старий і новий, які ввів юзер, перевіряємо access токен, і далі уже в сервісі дивимося чи новий пароль не 
+такий як інші старі паролі, або лише поередній, якщо відрізняється то міняємо пароль на новий, в базу відповідно 
+записуємо захешований пароль, і окремо зберігаємо старі паролі в новій таблиці з айдішніком юзера
 
-npm i @types/nodemailer
+OldPassword.model.ts
+````
+import { model, Schema, Types } from "mongoose";
 
-email endings - види для створення html в emails
+import { User } from "./User.model";
 
-npm i hbs
+const oldPasswordSchema = new Schema(
+  {
+    password: {
+      type: String,
+      require: true,
+    },
+    // посилання на інші таблиці прийнято починати з "_", це для того щоб ми знали для якого юзера була видана пара
+    // токенів та могли це перевірити
+    _userId: {
+      type: Types.ObjectId,
+      require: true,
+      // зсилаємось на таблицю юзер
+      ref: User,
+    },
+  },
+  {
+    versionKey: false,
+    timestamps: true,
+  }
+);
 
-hbs - handlebars для написання email в html форматі
+export const OldPassword = model("OldPassword", oldPasswordSchema);
 
-npm i nodemailer-express-handlebars - щоб подружити nodemailer з handlebars
-
-npm i @types/nodemailer-express-handlebars
-
-заходимо на пошту -> керування обліковим записом -> безпека -> двохетапна перевірка -> паролі додатків -> генеруємо 
-пароль
-
-створюємо папку email-templates, а в ній ще три
+````
+user.validator.ts
+````
+static changePassword = Joi.object({
+    oldPassword: this.password.required(),
+    newPassword: this.password.required(),
+  });
+````
 auth.router.ts
 ````
 router.post(
-  "/refresh",
-  authMiddleware.checkRefreshToken,
-  authController.refresh
+  "/changePassword",
+  commonMiddleware.isBodyValid(UserValidator.changePassword),
+  authMiddleware.checkAccessToken,
+  authController.changePassword
 );
-````
-auth.middleware.ts
-````
-public async checkRefreshToken(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> {
-    try {
-      // req.get таким чином дістаємо дані з хедера по ключу authorization
-      const refreshToken = req.get("Authorization");
-
-      if (!refreshToken) {
-        throw new ApiError("No token", 401);
-      }
-
-      const payload = tokenService.checkToken(refreshToken, ETokenType.Refresh);
-
-      const entity = await Token.findOne({ refreshToken });
-
-      if (!entity) {
-        throw new ApiError("Token not valid", 401);
-      }
-
-      req.res.locals.oldTokenPair = entity;
-      req.res.locals.tokenPayload = { name: payload.name, _id: payload._id };
-      next();
-    } catch (e) {
-      next(e);
-    }
-  }
-````
-token.service.ts
-````
-public checkToken(token: string, type: ETokenType): ITokenPayload {
-    try {
-      let secret: string;
-
-      switch (type) {
-        case ETokenType.Access:
-          secret = configs.JWT_ACCESS_SECRET;
-          break;
-        case ETokenType.Refresh:
-          secret = configs.JWT_REFRESH_SECRET;
-          break;
-      }
-      return jwt.verify(token, secret) as ITokenPayload;
-    } catch (e) {
-      throw new ApiError("Token not valid", 401);
-    }
-  }
-}
 ````
 auth.controller.ts
 ````
-public async refresh(
+public async changePassword(
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<Response<ITokensPair>> {
     try {
-      const oldTokenPair = req.res.locals.oldTokenPair as ITokensPair;
-      const tokenPayload = req.res.locals.tokenPayload as ITokenPayload;
+      const { _id: userId } = req.res.locals.tokenPayload as ITokenPayload;
 
-      const tokensPair = await authService.refresh(oldTokenPair, tokenPayload);
+      await authService.changePassword(req.body, userId);
 
-      return res.status(200).json(tokensPair);
+      return res.sendStatus(200);
     } catch (e) {
       next(e);
     }
   }
 ````
-token-type.enum.ts
-````
-export enum ETokenType {
-  Refresh = "refresh",
-  Access = "access",
-}
-
-````
 auth.service.ts
 ````
-public async refresh(
-    oldTokenPair: ITokensPair,
-    tokenPayload: ITokenPayload
-  ): Promise<ITokensPair> {
+public async changePassword(
+    dto: { newPassword: string; oldPassword: string },
+    userId: string
+  ): Promise<void> {
     try {
-      const tokensPair = await tokenService.generateTokenPair(tokenPayload);
+      // todo check for mistakes
+
+      // дістаємо масив усіх старих паролів що раніше вводив користувач
+      const oldPasswords = await OldPassword.find({ _userId: userId });
+      // порівнюємо наш старий пароль, який ми хочемо змінити з усіма іншими що раніше були
+      await Promise.all(
+        // { password: hash } беоремо пасворд але називаємо його хеш
+        oldPasswords.map(async ({ password: hash }) => {
+          const isMatched = await passwordService.compare(
+            dto.oldPassword,
+            hash
+          );
+          if (isMatched) {
+            throw new ApiError("Wrong old password", 400);
+          }
+        })
+      );
+
+      const user = await User.findById(userId);
+
+      const isMatched = await passwordService.compare(
+        dto.oldPassword,
+        user.password
+      );
+
+      if (!isMatched) {
+        throw new ApiError("Wrong old password", 400);
+      }
+      // захешовуємо новий пароль
+      const newHashPassword = await passwordService.hash(dto.newPassword);
 
       await Promise.all([
-        Token.create({ _userId: tokenPayload._id, ...tokensPair }),
-        Token.deleteOne({ refreshToken: tokensPair.refreshToken }),
+        // записуємо старий пароль в базу з паролями і з айдішніком юзера, щоб знати кому він належав
+        await OldPassword.create({ _userId: userId, password: user.password }),
+        // оновлюємо пароль юзера
+        await User.updateOne({ _id: userId }, { password: newHashPassword }),
       ]);
-
-      return tokensPair;
     } catch (e) {
       throw new ApiError(e.message, e.status);
     }

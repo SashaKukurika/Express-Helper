@@ -30,6 +30,21 @@ class AuthController {
       next(e);
     }
   }
+  public async changePassword(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<ITokensPair>> {
+    try {
+      const { _id: userId } = req.res.locals.tokenPayload as ITokenPayload;
+
+      await authService.changePassword(req.body, userId);
+
+      return res.sendStatus(200);
+    } catch (e) {
+      next(e);
+    }
+  }
   public async refresh(
     req: Request,
     res: Response,

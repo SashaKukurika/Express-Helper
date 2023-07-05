@@ -1,5 +1,6 @@
 import { EEmailAction } from "../enums/email.enum";
 import { ApiError } from "../errors";
+import { OldPassword } from "../models/OldPassword.model";
 import { Token } from "../models/Token.model";
 import { User } from "../models/User.model";
 import { ICredentials, ITokenPayload, ITokensPair } from "../types/token.type";
@@ -66,6 +67,52 @@ class AuthService {
       ]);
 
       return tokensPair;
+    } catch (e) {
+      throw new ApiError(e.message, e.status);
+    }
+  }
+  public async changePassword(
+    dto: { newPassword: string; oldPassword: string },
+    userId: string
+  ): Promise<void> {
+    try {
+      // todo check for mistakes
+
+      // дістаємо масив усіх старих паролів що раніше вводив користувач
+      const oldPasswords = await OldPassword.find({ _userId: userId });
+      // порівнюємо наш старий пароль, який ми хочемо змінити з усіма іншими що раніше були
+      await Promise.all(
+        // { password: hash } беоремо пасворд але називаємо його хеш
+        oldPasswords.map(async ({ password: hash }) => {
+          const isMatched = await passwordService.compare(
+            dto.oldPassword,
+            hash
+          );
+          if (isMatched) {
+            throw new ApiError("Wrong old password", 400);
+          }
+        })
+      );
+
+      const user = await User.findById(userId);
+
+      const isMatched = await passwordService.compare(
+        dto.oldPassword,
+        user.password
+      );
+
+      if (!isMatched) {
+        throw new ApiError("Wrong old password", 400);
+      }
+      // захешовуємо новий пароль
+      const newHashPassword = await passwordService.hash(dto.newPassword);
+
+      await Promise.all([
+        // записуємо старий пароль в базу з паролями і з айдішніком юзера, щоб знати кому він належав
+        await OldPassword.create({ _userId: userId, password: user.password }),
+        // оновлюємо пароль юзера
+        await User.updateOne({ _id: userId }, { password: newHashPassword }),
+      ]);
     } catch (e) {
       throw new ApiError(e.message, e.status);
     }
