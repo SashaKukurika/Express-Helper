@@ -109,16 +109,18 @@ class AuthService {
     userId: string
   ): Promise<void> {
     try {
-      // todo check for mistakes
-
       // дістаємо масив усіх старих паролів що раніше вводив користувач
-      const oldPasswords = await OldPassword.find({ _userId: userId });
+
+      const [oldPasswords, user] = await Promise.all([
+        OldPassword.find({ _userId: userId }),
+        User.findById(userId),
+      ]);
       // порівнюємо наш старий пароль, який ми хочемо змінити з усіма іншими що раніше були
       await Promise.all(
         // { password: hash } беоремо пасворд але називаємо його хеш
         oldPasswords.map(async ({ password: hash }) => {
           const isMatched = await passwordService.compare(
-            dto.oldPassword,
+            dto.newPassword,
             hash
           );
           if (isMatched) {
@@ -126,8 +128,6 @@ class AuthService {
           }
         })
       );
-
-      const user = await User.findById(userId);
 
       const isMatched = await passwordService.compare(
         dto.oldPassword,
