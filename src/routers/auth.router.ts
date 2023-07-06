@@ -16,6 +16,13 @@ router.post(
   userMiddleware.findAndThrow("email"),
   authController.register
 );
+
+router.put(
+  "/register/:token",
+  authMiddleware.checkActionToken(EActionTokenType.Activate),
+  authController.activate
+);
+
 router.post(
   "/login",
   commonMiddleware.isBodyValid(UserValidator.login),
