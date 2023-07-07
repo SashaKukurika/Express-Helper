@@ -1,77 +1,55 @@
-### Activate Account
+### Cron
 
-при реєстрації в емейлі включаємо в урлу актівейт токен і записуємо його в базу даних з силкою на юзера, потім нам 
-фронт повертає на наш ендпоінт токен що ми передавали, потім в мідлварі ми перевіряємо токен чи він є і чи він 
-валідний, в контролені витягуємо пейлоад і передаємо в сервіс, в якому ми оновлюємо статус та видаляємо токен з бази.
+npm i cron
 
-user-status.enum.ts
-````
-export enum EUserStatus {
-  Inactive = "inactive",
-  Active = "active",
-}
-````
-register.hbs
-````
-<table style="width: 100%; padding: 45px 35px; box-sizing: border-box">
-    <tr>
-        <td style="font-size: 18px; text-align: center;">
-<!--            {{name}} так ми динамічно можемо передавати дані сюди, через context в сервісі-->
-            {{name}} Welcome on our platform!
-        </td>
-    </tr>
-    <tr>
-        <td style="text-align: center;">
-            <p style="margin: 17px 0 0;">
-                You need drink some beer! Click on button!
-            </p>
-        </td>
-    </tr>
-    <tr>
-        <td style="text-align: center;">
-            <a href="{{frontUrl}}/{{actionToken}}"><button>SUBMIT</button></a>
-        </td>
-    </tr>Q
-</table>
-````
-auth.router.ts
-````
-router.put(
-  "/register/:token",
-  authMiddleware.checkActionToken(EActionTokenType.Activate),
-  authController.activate
-);
-````
-auth.controller.ts
-````
-public async activate(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<Response<void>> {
-    try {
-      const { jwtPayload } = req.res.locals;
-      await authService.activate(jwtPayload);
+npm i @types/cron
 
-      return res.sendStatus(201);
-    } catch (e) {
-      next(e);
-    }
-  }
+npm i dayjs
+
+крони дають змогу запускати певну функцію у певний час або проміжок часу, це дає можливість автоматизувати процеси 
+що часто повторюються, в нашому випадку видалення токенів які вже застаріли. тайм зони потрібно приводити до нульової, 
+тобто там де буде працювати апка
+
+remove-old-tokens.ts
 ````
-auth.service.ts
+import { CronJob } from "cron";
+import dayjs from "dayjs";
+import uts from "dayjs/plugin/utc";
+
+import { Token } from "../models/Token.model";
+
+// екстендимо щоб могти використовувати час в нульовій тайм зоні
+dayjs.extend(uts);
+const tokensRemover = async () => {
+  // subtract дая змогу відняти певну кількість часу від теперешнього
+  const previousMonth = dayjs().utc().subtract(30, "days");
+  // видалиться через 30 днів з моменту створення
+  await Token.deleteMany({ createdAt: { $lte: previousMonth } });
+};
+
+// removeOldTokens назва фнкції що ми будемо передавати в індекс.тс, chatGPT класно гернерує крони * * * * * *,
+// другий параметр tokensRemover це фн яку ми запускаєма start, а третім можна передати функцію яку будемо викликати
+// в індекс з методом stop
+export const removeOldTokens = new CronJob("* * * * * *", tokensRemover);
+
 ````
-public async activate(jwtPayload: ITokenPayload): Promise<void> {
-    try {
-      await Promise.all([
-        User.updateOne({ _id: jwtPayload._id }, { status: EUserStatus.Active }),
-        Action.deleteMany({
-          _userId: jwtPayload._id,
-          tokenType: EActionTokenType.Activate,
-        }),
-      ]);
-    } catch (e) {
-      throw new ApiError(e.message, e.status);
-    }
-  }
+index.ts
+````
+import { removeOldTokens } from "./remove-old-tokens.cron";
+
+export const cronRunner = () => {
+  // викликаємо тут функцію з методом старт
+  removeOldTokens.start();
+};
+````
+app.ts
+````
+app.listen(configs.DB_PORT, () => {
+  // підключаємо mongoose
+  // також можна ввести mongodb://localhost:27017/dec-2022 або mongodb://127.0.0.1:27017/dec-2022
+  mongoose.connect(configs.DB_URL);
+  // після запуску сервера почнуть виконуватись наші крони
+  cronRunner();
+  console.log(`Server has started on PORT ${configs.DB_PORT}`);
+});
 ````

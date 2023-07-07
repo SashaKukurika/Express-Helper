@@ -2,6 +2,7 @@ import express, { NextFunction, Request, Response } from "express"; // витя�
 import * as mongoose from "mongoose";
 
 import { configs } from "./configs/configs";
+import { cronRunner } from "./crons";
 import { ApiError } from "./errors";
 import { authRouter } from "./routers/auth.router";
 import { userRouter } from "./routers/user.router";
@@ -28,5 +29,7 @@ app.listen(configs.DB_PORT, () => {
   // підключаємо mongoose
   // також можна ввести mongodb://localhost:27017/dec-2022 або mongodb://127.0.0.1:27017/dec-2022
   mongoose.connect(configs.DB_URL);
+  // після запуску сервера почнуть виконуватись наші крони
+  cronRunner();
   console.log(`Server has started on PORT ${configs.DB_PORT}`);
 }); // буде слухати порт, топто івентлуп буде завжди працювати і чекати на нові реквести щоб їх обробити
