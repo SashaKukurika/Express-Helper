@@ -112,13 +112,14 @@ class AuthService {
       // дістаємо масив усіх старих паролів що раніше вводив користувач
 
       const [oldPasswords, user] = await Promise.all([
-        OldPassword.find({ _userId: userId }),
+        OldPassword.find({ _userId: userId }).lean(),
         User.findById(userId),
       ]);
+      const passwords = [...oldPasswords, { password: user.password }];
       // порівнюємо наш старий пароль, який ми хочемо змінити з усіма іншими що раніше були
       await Promise.all(
         // { password: hash } беоремо пасворд але називаємо його хеш
-        oldPasswords.map(async ({ password: hash }) => {
+        passwords.map(async ({ password: hash }) => {
           const isMatched = await passwordService.compare(
             dto.newPassword,
             hash
@@ -129,14 +130,6 @@ class AuthService {
         })
       );
 
-      const isMatched = await passwordService.compare(
-        dto.oldPassword,
-        user.password
-      );
-
-      if (!isMatched) {
-        throw new ApiError("Wrong old password", 400);
-      }
       // захешовуємо новий пароль
       const newHashPassword = await passwordService.hash(dto.newPassword);
 
