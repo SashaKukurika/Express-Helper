@@ -25,10 +25,10 @@ app.use((error: ApiError, req: Request, res: Response, next: NextFunction) => {
   return res.status(status).json(error.message);
 });
 
-app.listen(configs.DB_PORT, () => {
+app.listen(configs.DB_PORT, async () => {
   // підключаємо mongoose
   // також можна ввести mongodb://localhost:27017/dec-2022 або mongodb://127.0.0.1:27017/dec-2022
-  mongoose.connect(configs.DB_URL);
+  await mongoose.connect(configs.DB_URL);
   // після запуску сервера почнуть виконуватись наші крони
   cronRunner();
   console.log(`Server has started on PORT ${configs.DB_PORT}`);
