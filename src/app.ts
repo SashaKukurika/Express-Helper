@@ -1,4 +1,5 @@
 import express, { NextFunction, Request, Response } from "express"; // витягуємо і інсталимо
+import rateLimit from "express-rate-limit";
 import * as mongoose from "mongoose";
 import swaggerUi from "swagger-ui-express";
 
@@ -11,6 +12,19 @@ import { userRouter } from "./routers/user.router";
 import * as swaggerJson from "./utils/swagger.json";
 
 const app = express(); // пишемо app для зручності використання в подальшому, вже як виклик функції
+
+// набір правил по кількості запитів з одної айпі за певний час
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 60 second
+  max: 10, // Limit each IP to 10 requests per `window` (here, per 15 minutes)
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+});
+
+// це якщо хочемо використовувати на всіх ендпоінтах *
+// Apply the rate limiting middleware to API calls only
+app.use("*", apiLimiter);
+// це якщо хочемо використовувати на одному ендпоінту
+//app.use("/users", apiLimiter, userRouter);
 
 app.use(express.json()); // ці два використовуються для того щоб наша апка могла читати body і квері
 app.use(express.urlencoded({ extended: true }));

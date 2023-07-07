@@ -1,8 +1,6 @@
-### Swagger
+### Rate Limit
 
-npm i swagger-ui-express
-
-npm i @types/swagger-ui-express
+npm i express-rate-limit
 
 swagger це документація в форматі json яку ми пишемо для фронта, запустити її http://localhost:5100/swagger/ , також 
 хороший приклад з якого можна підглядати https://petstore.swagger.io/, ми розписуємо що робить, віддає і як працює 
@@ -10,12 +8,20 @@ swagger це документація в форматі json яку ми пиш�
 
 app.ts
 ````
-import swaggerUi from "swagger-ui-express";
-// імпортуємо щоб закинути в swaggerUi.setup
-import * as swaggerJson from "./utils/swagger.json";
+import rateLimit from "express-rate-limit";
 
-// щоб запустився наш свагер на цьому ендпоінті
-app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerJson));
+// набір правил по кількості запитів з одної айпі за певний час
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 60 second
+  max: 10, // Limit each IP to 10 requests per `window` (here, per 15 minutes)
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+});
+
+// це якщо хочемо використовувати на всіх ендпоінтах *
+// Apply the rate limiting middleware to API calls only
+app.use("*", apiLimiter);
+// це якщо хочемо використовувати на одному ендпоінту
+//app.use("/users", apiLimiter, userRouter);
 ````
 swagger.json
 ````
