@@ -1,24 +1,3 @@
-### Swagger
-
-npm i swagger-ui-express
-
-npm i @types/swagger-ui-express
-
-swagger це документація в форматі json яку ми пишемо для фронта, запустити її http://localhost:5100/swagger/ , також 
-хороший приклад з якого можна підглядати https://petstore.swagger.io/, ми розписуємо що робить, віддає і як працює 
-кожен ендпоінт.
-
-app.ts
-````
-import swaggerUi from "swagger-ui-express";
-// імпортуємо щоб закинути в swaggerUi.setup
-import * as swaggerJson from "./utils/swagger.json";
-
-// щоб запустився наш свагер на цьому ендпоінті
-app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerJson));
-````
-swagger.json
-````
 {
   "swagger": "2.0",
   "info": {
@@ -97,9 +76,3 @@ swagger.json
     }
   }
 }
-````
-tsconfig.json
-````
-// додаємо для свагера щоб бачило json
-"resolveJsonModule": true,
-````

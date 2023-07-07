@@ -1,11 +1,14 @@
 import express, { NextFunction, Request, Response } from "express"; // витягуємо і інсталимо
 import * as mongoose from "mongoose";
+import swaggerUi from "swagger-ui-express";
 
 import { configs } from "./configs/configs";
 import { cronRunner } from "./crons";
 import { ApiError } from "./errors";
 import { authRouter } from "./routers/auth.router";
 import { userRouter } from "./routers/user.router";
+// імпортуємо щоб закинути в swaggerUi.setup
+import * as swaggerJson from "./utils/swagger.json";
 
 const app = express(); // пишемо app для зручності використання в подальшому, вже як виклик функції
 
@@ -15,6 +18,9 @@ app.use(express.urlencoded({ extended: true }));
 // звертаємось до нашого роутера, щоб мати доступ до прописаних там ендпоінтів
 app.use("/users", userRouter);
 app.use("/auth", authRouter);
+
+// щоб запустився наш свагер на цьому ендпоінті
+app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerJson));
 
 // тут ми відловлюємо усі ерорки що випали з роутів, обовязково має бути 4 аргументи в колбеці, бо саме коли їх
 // чотири то перша ерорка
