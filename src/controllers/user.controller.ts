@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { UploadedFile } from "express-fileupload";
 
 import { userService } from "../services/user.service";
 import { IUser } from "../types/user.type";
@@ -65,6 +66,42 @@ class UserController {
   }
 
   public async deleteById(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<void>> {
+    try {
+      const { userId } = req.params;
+
+      await userService.deleteById(userId);
+
+      return res.sendStatus(204);
+    } catch (e) {
+      // це вказує що ерорку потрібно передати далі
+      next(e);
+    }
+  }
+
+  public async uploadAvatar(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<void>> {
+    try {
+      const { userId } = req.params;
+      // пишемо as UploadedFile щоб тайпскріпт розумів що це один файл а не масив
+      const avatar = req.files.avatar as UploadedFile;
+
+      const user = await userService.uploadAvatar(userId, avatar);
+
+      return res.status(201).json(user);
+    } catch (e) {
+      // це вказує що ерорку потрібно передати далі
+      next(e);
+    }
+  }
+
+  public async deleteAvatar(
     req: Request,
     res: Response,
     next: NextFunction

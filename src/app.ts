@@ -1,4 +1,5 @@
 import express, { NextFunction, Request, Response } from "express"; // витягуємо і інсталимо
+import fileUpload from "express-fileupload";
 import rateLimit from "express-rate-limit";
 import * as mongoose from "mongoose";
 import swaggerUi from "swagger-ui-express";
@@ -28,6 +29,9 @@ app.use("*", apiLimiter);
 
 app.use(express.json()); // ці два використовуються для того щоб наша апка могла читати body і квері
 app.use(express.urlencoded({ extended: true }));
+// для можливості завантаження файлів, дозволить в реквесті мати окреме поле files де будуть лежати файли що ми
+// будемо відправляти
+app.use(fileUpload());
 
 // звертаємось до нашого роутера, щоб мати доступ до прописаних там ендпоінтів
 app.use("/users", userRouter);

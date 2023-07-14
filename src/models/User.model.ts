@@ -24,15 +24,19 @@ const userSchema = new Schema(
     },
     email: {
       type: String,
-      require: true,
+      required: true,
       trim: true,
       lowercase: true,
     },
     password: {
       type: String,
-      require: true,
+      required: true,
       // таким чином не буде видаватися пароль при запитах до бази
       select: true,
+    },
+    avatar: {
+      type: String,
+      required: false,
     },
   },
   {
