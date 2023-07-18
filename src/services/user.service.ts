@@ -52,6 +52,25 @@ class UserService {
       {
         $set: { avatar: pathToFile },
       },
+      // для того щоб повернуло вже оновленого користувача а не того що він першочергово знайшов
+      { new: true }
+    );
+  }
+  public async deleteAvatar(userId: string): Promise<IUser> {
+    const user = await this.getByIdOrThrow(userId);
+
+    if (!user.avatar) {
+      return user;
+    }
+    await s3Service.deleteFile(user.avatar);
+
+    return await User.findByIdAndUpdate(
+      userId,
+      // $unset дозволяє видалити лише один параметр а не весь обєкт
+      {
+        $unset: { avatar: true },
+      },
+      // для того щоб повернуло вже оновленого користувача а не того що він першочергово знайшов
       { new: true }
     );
   }
