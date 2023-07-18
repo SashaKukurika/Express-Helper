@@ -1,6 +1,10 @@
 import path from "node:path";
 
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { UploadedFile } from "express-fileupload";
 import { v4 } from "uuid";
 
@@ -36,6 +40,17 @@ class S3Service {
       })
     );
     return filePath;
+  }
+  public async deleteFile(filePath: string): Promise<void> {
+    await this.client.send(
+      //видаляємо наявний файл з aws
+      new DeleteObjectCommand({
+        // в який бакет пишемо
+        Bucket: configs.AWS_S3_NAME,
+        // шлях до файла, за якою адресою в бакеті щоб лежав
+        Key: filePath,
+      })
+    );
   }
   private buildPath(type: string, id: string, fileName: string): string {
     // генеруємо унікальний шлях, v4 це унікальна айді, а path.extname(fileName) витягне розширення файлу

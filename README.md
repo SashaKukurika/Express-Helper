@@ -6,7 +6,10 @@ npm i express-fileupload
 
 npm i @aws-sdk/client-s3
 
-створення бакета на AWS див lesson 10 з 35хв
+створення бакета на AWS див lesson 10 з 35хв, приймаємо файл з фронта, в реквесті буде окреме поле files завдяки 
+express-fileupload, на окремому роуті чекаємо токен і чи існує юзер, потім паревіряємо сам файл чи він відповідає 
+нашим вимогам, і тоді вже грузимо файл на aws і записуємо урлу до нас в базу але без основної, якщо уже був аватар 
+раніше то ми його видаляємо з aws і бази щоб не засмічувати апку.
 
 app.ts
 ````
@@ -82,7 +85,9 @@ user.controller.ts
 
       const user = await userService.uploadAvatar(userId, avatar);
 
-      return res.status(201).json(user);
+      const response = userMapper.toResponse(user);
+
+      return res.status(201).json(response);
     } catch (e) {
       // це вказує що ерорку потрібно передати далі
       next(e);
@@ -113,18 +118,31 @@ user.service.ts
     avatar: UploadedFile
   ): Promise<IUser> {
     const user = await this.getByIdOrThrow(userId);
-
+    // якщо був старий аватар то варто почистити його з aws щоб зберігався лише один
+    if (user.avatar) {
+      await s3Service.deleteFile(user.avatar);
+    }
     const pathToFile = await s3Service.uploadFile(avatar, "user", userId);
-    console.log(pathToFile);
-    return user;
-    // await User.deleteOne({ _id: userId });
+
+    return await User.findByIdAndUpdate(
+      userId,
+      // $set дозволяє оновити лише один параметр а не весь обєкт
+      {
+        $set: { avatar: pathToFile },
+      },
+      { new: true }
+    );
   }
 ````
 s3.service.ts
 ````
 import path from "node:path";
 
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { UploadedFile } from "express-fileupload";
 import { v4 } from "uuid";
 
@@ -161,6 +179,17 @@ class S3Service {
     );
     return filePath;
   }
+  public async deleteFile(filePath: string): Promise<void> {
+    await this.client.send(
+      //видаляємо наявний файл з aws
+      new DeleteObjectCommand({
+        // в який бакет пишемо
+        Bucket: configs.AWS_S3_NAME,
+        // шлях до файла, за якою адресою в бакеті щоб лежав
+        Key: filePath,
+      })
+    );
+  }
   private buildPath(type: string, id: string, fileName: string): string {
     // генеруємо унікальний шлях, v4 це унікальна айді, а path.extname(fileName) витягне розширення файлу
     return `${type}/${id}/${v4()}${path.extname(fileName)}`;
@@ -184,5 +213,32 @@ User.model.ts
       type: String,
       required: false,
     },
+````
+user.type.ts
+````
+  avatar: string;
+````
+user.mapper.ts
+````
+import { configs } from "../configs/configs";
+import { IUser } from "../types/user.type";
+
+class UserMapper {
+  public toResponse(user: IUser) {
+    // прописуємо що саме буде повертатися на фронт
+    return {
+      _id: user._id,
+      name: user.name,
+      age: user.age,
+      email: user.email,
+      gender: user.gender,
+      // складаємо повний шлях для фронтенда
+      avatar: user.avatar ? `${configs.AWS_S3_URL}/${user.avatar}` : null,
+    };
+  }
+}
+
+export const userMapper = new UserMapper();
+
 ````
 

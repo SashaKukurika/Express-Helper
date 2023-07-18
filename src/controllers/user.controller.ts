@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { UploadedFile } from "express-fileupload";
 
+import { userMapper } from "../mapers/user.mapper";
 import { userService } from "../services/user.service";
 import { IUser } from "../types/user.type";
 
@@ -94,7 +95,9 @@ class UserController {
 
       const user = await userService.uploadAvatar(userId, avatar);
 
-      return res.status(201).json(user);
+      const response = userMapper.toResponse(user);
+
+      return res.status(201).json(response);
     } catch (e) {
       // це вказує що ерорку потрібно передати далі
       next(e);

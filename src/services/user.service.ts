@@ -29,7 +29,7 @@ class UserService {
       { returnDocument: "after" }
     );
   }
-  // Partial це з TS робить усі поля з інтерфейсу не обовязковими
+
   public async deleteById(userId: string): Promise<void> {
     await this.getByIdOrThrow(userId);
 
@@ -40,11 +40,20 @@ class UserService {
     avatar: UploadedFile
   ): Promise<IUser> {
     const user = await this.getByIdOrThrow(userId);
-
+    // якщо був старий аватар то варто почистити його з aws щоб зберігався лише один
+    if (user.avatar) {
+      await s3Service.deleteFile(user.avatar);
+    }
     const pathToFile = await s3Service.uploadFile(avatar, "user", userId);
-    console.log(pathToFile);
-    return user;
-    // await User.deleteOne({ _id: userId });
+
+    return await User.findByIdAndUpdate(
+      userId,
+      // $set дозволяє оновити лише один параметр а не весь обєкт
+      {
+        $set: { avatar: pathToFile },
+      },
+      { new: true }
+    );
   }
 
   private async getByIdOrThrow(userId: string): Promise<IUser> {
