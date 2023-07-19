@@ -1,84 +1,79 @@
-### AWS STREAM
+### TWILIO
 
-npm i multer - але версія нижча ніж 1.4.5
+npm i twilio
 
-npm i streamifier
+сервіс для відправки смс та багато чого іншого, налаштування на сайті див лекція 11, створюємо окремо сервіс 
+для розсилки смс, та викликаємо його де нам потрібно, наприклад при реєстрації користувача = smsService.sendSms(data.
+phone, ESmsAction.WELCOME),.
 
-стріми для великих файлів, передаються файли чанками, туду - зберігати шлях в базу даних.
-
-user.router.ts
+configs.ts
 ````
-router.post(
-  "/:userId/video",
-  authMiddleware.checkAccessToken,
-  commonMiddleware.isIdValid("userId"),
-  userController.uploadVideo
-);
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+  TWILIO_MESSAGE_SERVICE_SID: process.env.TWILIO_MESSAGE_SERVICE_SID,
 ````
-user.controller.ts
+regex.constants.ts
 ````
-  public async uploadVideo(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<any> {
+PHONE:
+    /\(?\+[0-9]{1,3}\)? ?-?[0-9]{1,3} ?-?[0-9]{3,5} ?-?[0-9]{4}( ?-?[0-9]{3})? ?(\w{1,10}\s?\d{1,6})?/,
+````
+sms.constants.ts
+````
+import { ESmsAction } from "../enums/sms.enum";
+
+export const smsTemplates = {
+  // [] динамічно будуть підставлятися ключі
+  [ESmsAction.WELCOME]: "welcome to our platform",
+};
+````
+sms.enums.ts
+````
+export enum ESmsAction {
+  WELCOME,
+}
+````
+User.model.ts
+````
+phone: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+````
+sms.service.ts
+````
+import { Twilio } from "twilio";
+
+import { configs } from "../configs/configs";
+import { smsTemplates } from "../constants/sms.constants";
+import { ESmsAction } from "../enums/sms.enum";
+
+class SmsService {
+  // в конструкторі ми ініціюємо екземпляр класу, тобто відразу нас реєструє в твіліо з нашими даними і тоді через
+  // client ми можемо доступатись
+  constructor(
+    private client = new Twilio(
+      configs.TWILIO_ACCOUNT_SID,
+      configs.TWILIO_AUTH_TOKEN
+    )
+  ) {}
+  public async sendSms(phone: string, action: ESmsAction) {
     try {
-      const { userId } = req.params;
-      const upload = multer().single("");
-
-      upload(req, res, async (err) => {
-        if (err) {
-          throw new ApiError("Download error", 500);
-        }
-
-        const video = req.files.video as UploadedFile;
-        // так ми створили стрім
-        const stream = createReadStream(video.data);
-        // наш стрім направляємо в с3 бакет, буде поступово читати наш файл і віддавати
-        const pathToVideo = await s3Service.uploadFileStream(
-          stream,
-          "user",
-          userId,
-          video
-        );
-
-        return res.status(201).json(pathToVideo);
+      const template = smsTemplates[action];
+      await this.client.messages.create({
+        // те що буде писатися в смс
+        body: template,
+        // з якого сервісу ми це відпарвляємо
+        messagingServiceSid: configs.TWILIO_MESSAGE_SERVICE_SID,
+        // кому прийде смс
+        to: phone,
       });
     } catch (e) {
-      // це вказує що ерорку потрібно передати далі
-      next(e);
+      console.log(e.message);
     }
   }
-````
-s3.service.ts
-````
-public async uploadFileStream(
-    stream: Readable,
-    itemType: string,
-    itemId: string,
-    file: UploadedFile
-  ): Promise<void> {
-    const filePath = this.buildPath(itemType, itemId, file.name);
+}
 
-    await this.client.send(
-      //видаляємо наявний файл з aws
-      new PutObjectCommand({
-        // в який бакет пишемо
-        Bucket: configs.AWS_S3_NAME,
-        // шлях до файла, за якою адресою в бакеті щоб лежав
-        Key: filePath,
-        // це і є сам файл що ми хочемо зберегти
-        Body: stream,
-        ACL: configs.AWS_S3_ACL,
-        ContentType: file.mimetype,
-        // вказуємо розмір того що буде завантажуватися
-        ContentLength: file.size,
-      })
-    );
-  }
-  private buildPath(type: string, id: string, fileName: string): string {
-    // генеруємо унікальний шлях, v4 це унікальна айді, а path.extname(fileName) витягне розширення файлу
-    return `${type}/${id}/${v4()}${path.extname(fileName)}`;
-  }
+export const smsService = new SmsService();
 ````
 
