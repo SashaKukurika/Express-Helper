@@ -1,7 +1,10 @@
+import http from "node:http";
+
 import express, { NextFunction, Request, Response } from "express"; // витягуємо і інсталимо
 import fileUpload from "express-fileupload";
 import rateLimit from "express-rate-limit";
 import * as mongoose from "mongoose";
+import socketIO from "socket.io";
 import swaggerUi from "swagger-ui-express";
 
 import { configs } from "./configs/configs";
@@ -13,6 +16,48 @@ import { userRouter } from "./routers/user.router";
 import * as swaggerJson from "./utils/swagger.json";
 
 const app = express(); // пишемо app для зручності використання в подальшому, вже як виклик функції
+
+// щоб використовувати server як і app раніше
+const server = http.createServer(app);
+// cors може надавати доступ до певних ендпоінтів лише, типу localhost:3000, в нашому випадку ми кажемо що є доступ
+// з усіх origin: "*"
+const io = new socketIO.Server(server, { cors: { origin: "*" } });
+
+io.on("connection", (socket) => {
+  console.log(socket.id);
+  // handshake можемо приймати з auth певну інфу, наприклад токени, чи query
+  console.log(socket.handshake);
+
+  // messageData це те що ми передали з фронта при кліку по назві події message:create
+  socket.on("message:create", (messageData) => {
+    console.log(messageData, "MESSAGE DATA");
+
+    // тут ми знову оголосили подію і назвали її message:receive і передали на фронт { ok: true }
+    socket.emit("message:receive", { ok: true });
+  });
+
+  // надсилає усім приєднаним сокетам
+  socket.on("broadcast:all", () => {
+    // io.emit це вказує на те що розіслати усім включаючи відправника а не лише одному коли socket.emit
+    // io.emit("alert", "Air alert");
+
+    // socket.broadcast.emit вказує на те що розіслати усім окрім відправника
+    socket.broadcast.emit("alert", "Air alert");
+  });
+
+  // приєднання до якоїсь кімнати, тобто як до якогось чату в телеграмі
+  socket.on("room:joinUser", ({ roomId }) => {
+    socket.join(roomId);
+    // а це щоб покинути кімнату
+    // socket.leave(roomId);
+
+    // io.to це бродкаст в межах кімнати усім включаючи відправника
+    io.to(roomId).emit("room:newUserAlert", socket.id);
+
+    // socket.to це бродкаст в межах кімнати усім окрім відправника
+    // socket.to(roomId).emit("room:newUserAlert", socket.id);
+  });
+});
 
 // набір правил по кількості запитів з одної айпі за певний час
 const apiLimiter = rateLimit({
@@ -57,3 +102,9 @@ app.listen(configs.DB_PORT, () => {
   cronRunner();
   console.log(`Server has started on PORT ${configs.DB_PORT}`);
 }); // буде слухати порт, топто івентлуп буде завжди працювати і чекати на нові реквести щоб їх обробити
+
+// так само як і в простому pull слухаємо сервер
+server.listen(3000, () => {
+  // eslint-disable-next-line no-console
+  console.log("Listen", 3000);
+});
