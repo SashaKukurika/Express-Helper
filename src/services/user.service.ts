@@ -2,12 +2,50 @@ import { UploadedFile } from "express-fileupload";
 
 import { ApiError } from "../errors";
 import { User } from "../models/User.model";
+import { IPaginationResponse, IQuery } from "../types/query.type";
 import { IUser } from "../types/user.type";
 import { s3Service } from "./s3.service";
 
 class UserService {
-  public async findAll(): Promise<IUser[] | any> {
-    return await User.find();
+  public async findAllWithPagination(
+    query: IQuery
+  ): Promise<IPaginationResponse<any>> {
+    try {
+      // ці всі махінації щоб поставити знак $ перед gte|lte|gt|lt, щоб потім при пошуку видати значення потрібні
+      const queryStr = JSON.stringify(query);
+      const queryObj = JSON.parse(
+        queryStr.replace(/\b(gte|lte|gt|lt)\b/, (match) => `$${match}`)
+      );
+      // page = 1 це означає що якщо нам не передали даних до по дефолту буде 1, ...searchObject rest оператор що
+      // забере до себе всі дані що залишилися
+      const {
+        page = 1,
+        limit = 10,
+        sortedBy = "createdAt",
+        ...searchObject
+      } = queryObj;
+
+      // формула щоб вирахувати скільки потрібно пропустити
+      const skip = +limit * (+page - 1);
+
+      // limit скільки елементів ми візьмемо, skip - скільки пропустимо від першого елементу, sort по якому ключу
+      // сортувати
+      const [users, usersTotalCount, usersSearchCount] = await Promise.all([
+        User.find(searchObject).limit(+limit).skip(skip).sort(sortedBy),
+        User.count(),
+        User.count(searchObject),
+      ]);
+
+      return {
+        page: +page,
+        perPage: +limit,
+        itemsCount: usersTotalCount,
+        itemsFound: usersSearchCount,
+        data: users,
+      };
+    } catch (e) {
+      throw new ApiError(e.message, e.status);
+    }
   }
   public async create(data: IUser): Promise<IUser | any> {
     return await User.create({ ...data });

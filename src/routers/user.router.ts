@@ -8,7 +8,7 @@ import { UserValidator } from "../validators";
 
 const router = Router();
 
-router.get("/", userController.findAll);
+router.get("/", userController.findAllWithPagination);
 
 router.post(
   "/",
@@ -23,6 +23,7 @@ router.get(
   authMiddleware.checkAccessToken,
   userController.findById
 );
+
 router.put(
   "/:userId",
   commonMiddleware.isIdValid("userId"),

@@ -1,127 +1,89 @@
-### SOCKET
+### PAGINATION
 
-npm install socket.io
+http://localhost:5100/users?page=1&limit=10&sortedBy=-name&age[gte]=5, тут ми задаємо page = 1 limit = 10 це просто 
+значення, як і sortedBy але тут ми передаємо назву ключа по якому буде сортуватися наш респонс, а знак мінус перед 
+name означає що сортування буде задом на перед age[gte]=5 тут ми передамо age: {gte: 5} тобто так щоб коли приймемо 
+змогли віддати юзерів старших 5
 
-npm i socket.io-client
-
-на бекенді будуть самі emit, тобто лише приймати, а на фронті лише on, і це все буде використовуватись в стандартних 
-ендпоінтах
-
-app.ts
+user.router.ts
 ````
-import http from "node:http";
-import express, { NextFunction, Request, Response } from "express"; // витягуємо і інсталимо
-import socketIO from "socket.io";
-
-const app = express();
-/ щоб використовувати server як і app раніше
-const server = http.createServer(app);
-// cors може надавати доступ до певних ендпоінтів лише, типу localhost:3000, в нашому випадку ми кажемо що є доступ
-// з усіх origin: "*"
-const io = new socketIO.Server(server, { cors: { origin: "*" } });
-
-io.on("connection", (socket) => {
-  console.log(socket.id);
-  // handshake можемо приймати з auth певну інфу, наприклад токени, чи query
-  console.log(socket.handshake);
-
-  // messageData це те що ми передали з фронта при кліку по назві події message:create
-  socket.on("message:create", (messageData) => {
-    console.log(messageData, "MESSAGE DATA");
-
-    // тут ми знову оголосили подію і назвали її message:receive і передали на фронт { ok: true }
-    socket.emit("message:receive", { ok: true });
-  });
-
-  // надсилає усім приєднаним сокетам
-  socket.on("broadcast:all", () => {
-    // io.emit це вказує на те що розіслати усім включаючи відправника а не лише одному коли socket.emit
-    // io.emit("alert", "Air alert");
-
-    // socket.broadcast.emit вказує на те що розіслати усім окрім відправника
-    socket.broadcast.emit("alert", "Air alert");
-  });
-
-  // приєднання до якоїсь кімнати, тобто як до якогось чату в телеграмі
-  socket.on("room:joinUser", ({ roomId }) => {
-    socket.join(roomId);
-    // а це щоб покинути кімнату
-    // socket.leave(roomId);
-
-    // io.to це бродкаст в межах кімнати усім включаючи відправника
-    io.to(roomId).emit("room:newUserAlert", socket.id);
-
-    // socket.to це бродкаст в межах кімнати усім окрім відправника
-    // socket.to(roomId).emit("room:newUserAlert", socket.id);
-  });
-});
-
-// так само як і в простому pull слухаємо сервер
-server.listen(3000, () => {
-  // eslint-disable-next-line no-console
-  console.log("Listen", 3000);
-});
+router.get("/", userController.findAllWithPagination);
 ````
-index.html
+user.controller.ts
 ````
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Document</title>
-</head>
-<body>
-<button id="send">one-to-one</button>
-<button id="broadcast">broadcast</button>
-<button id="joinRoom1">Room 1</button>
-<button id="joinRoom2">Room 2</button>
+public async findAllWithPagination(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<Response<IPaginationResponse<IUser>>> {
+    try {
+      const users = await userService.findAllWithPagination(
+        req.query as unknown as IQuery
+      );
 
-<script src="https://cdn.socket.io/4.6.0/socket.io.min.js" integrity="sha384-c79GN5VsunZvi+Q/WObgk2in0CbZsHnjEqvFxC5DxHn9lTfNce2WW6h2pH6u/kF+" crossorigin="anonymous"></script>
-<script>
-    const socket = io("http://localhost:3000", {
-        // передаємо в handshake щоб відловити на беці
-        query: "age=20&name=diana",
-        auth: {token: "Barer sgvdfbdsgb"}
-    })
-
-    const okBtn = document.getElementById('send');
-    const broadcastBtn = document.getElementById('broadcast');
-    const joinRoom1Btn = document.getElementById('joinRoom1');
-    const joinRoom2Btn = document.getElementById('joinRoom2');
-
-    okBtn.onclick = () => {
-        // перший аргумент це назва події, другий те що ми передамо при її виклиці on
-        socket.emit("message:create", {text: "My first socket event"})
+      return res.json(users);
+    } catch (e) {
+      next(e);
     }
+  }
+````
+user.service.ts
+````
+public async findAllWithPagination(
+    query: IQuery
+  ): Promise<IPaginationResponse<any>> {
+    try {
+    // ці всі махінації щоб поставити знак $ перед gte|lte|gt|lt, щоб потім при пошуку видати значення потрібні
+      const queryStr = JSON.stringify(query);
+      const queryObj = JSON.parse(
+        queryStr.replace(/\b(gte|lte|gt|lt)\b/, (match) => `$${match}`)
+      );
+      // page = 1 це означає що якщо нам не передали даних до по дефолту буде 1, ...searchObject rest оператор що
+      // забере до себе всі дані що залишилися
+      const {
+        page = 1,
+        limit = 10,
+        sortedBy = "createdAt",
+        ...searchObject
+      } = queryObj;
 
-    // ми по назві пподії message:receive отримали інфу massageInfo з бекенду і вивели
-    socket.on("message:receive", (massageInfo) => {
-        document.write(JSON.stringify(massageInfo, null, 2))
-    })
+      // формула щоб вирахувати скільки потрібно пропустити
+      const skip = +limit * (+page - 1);
 
-    broadcastBtn.onclick = () => {
-        socket.emit("broadcast:all", "This is broadcast to all")
+      // limit скільки елементів ми візьмемо, skip - скільки пропустимо від першого елементу, sort по якому ключу
+      // сортувати
+      const [users, usersTotalCount, usersSearchCount] = await Promise.all([
+        User.find(searchObject).limit(+limit).skip(skip).sort(sortedBy),
+        User.count(),
+        User.count(searchObject),
+      ]);
+
+      return {
+        page: +page,
+        perPage: +limit,
+        itemsCount: usersTotalCount,
+        itemsFound: usersSearchCount,
+        data: users,
+      };
+    } catch (e) {
+      throw new ApiError(e.message, e.status);
     }
+  }
+````
+query.types.ts
+````
+export interface IQuery {
+  page: string;
+  limit: string;
+  sortedBy: string;
 
-    socket.on("alert", (message) => {
-        alert(message)
-    })
-
-    socket.on("room:newUserAlert", (joinedUserId) => {
-        alert(`user ${joinedUserId} join chat`)
-    })
-
-    joinRoom1Btn.onclick = () => {
-        socket.emit("room:joinUser", {roomId: 1});
-    }
-
-    joinRoom2Btn.onclick = () => {
-        socket.emit("room:joinUser", {roomId: 2});
-    }
-</script>
-</body>
-</html>
+  [key: string]: string;
+}
+export interface IPaginationResponse<T> {
+  page: number;
+  perPage: number;
+  itemsCount: number;
+  itemsFound: number;
+  data: T[];
+}
 ````

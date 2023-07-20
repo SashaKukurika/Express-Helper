@@ -7,16 +7,19 @@ import { ApiError } from "../errors";
 import { userMapper } from "../mapers/user.mapper";
 import { s3Service } from "../services/s3.service";
 import { userService } from "../services/user.service";
+import { IPaginationResponse, IQuery } from "../types/query.type";
 import { IUser } from "../types/user.type";
 
 class UserController {
-  public async findAll(
+  public async findAllWithPagination(
     req: Request,
     res: Response,
     next: NextFunction
-  ): Promise<Response<IUser[]>> {
+  ): Promise<Response<IPaginationResponse<IUser>>> {
     try {
-      const users = await userService.findAll();
+      const users = await userService.findAllWithPagination(
+        req.query as unknown as IQuery
+      );
 
       return res.json(users);
     } catch (e) {
