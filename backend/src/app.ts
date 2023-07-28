@@ -24,9 +24,31 @@ app.use((error: ApiError, req: Request, res: Response, next: NextFunction) => {
   return res.status(status).json(error.message);
 });
 
-app.listen(configs.DB_PORT, () => {
-  // підключаємо mongoose
-  // також можна ввести mongodb://localhost:27017/dec-2022 або mongodb://127.0.0.1:27017/dec-2022
-  mongoose.connect(configs.DB_URL);
-  console.log(`Server has started on PORT ${configs.DB_PORT}`);
-}); // буде слухати порт, топто івентлуп буде завжди працювати і чекати на нові реквести щоб їх обробити
+const dbConnect = async () => {
+  let dbCon = false;
+
+  while (!dbCon){
+    try{
+      console.log("Connecting to database")
+      await mongoose.connect(configs.DB_URL);
+      dbCon = true
+    } catch (e) {
+      console.log("Database unavailable, wait 3 seconds");
+      await new Promise(resolve => setTimeout(resolve, 3000))
+    }
+  }
+}
+
+const start = async () => {
+  try{
+  await dbConnect();
+  await app.listen(configs.DB_PORT, () => {
+    console.log(`Server has started on PORT ${configs.DB_PORT}`);
+  });
+  } catch (e) {
+    console.log(e)
+  }
+}
+
+start();
+

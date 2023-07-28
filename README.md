@@ -1,243 +1,139 @@
-npm i jsonwebtoken
+## Docker AWC Connection
 
-npm i @types/jsonwebtoken
+### Nest CLI
+```bash
+remove dotenv from package.json and configs
+create directory - backend, move -src, package.json, eslint, tsconfig to this directory
+$ create file - docker-compose.yml
 
-шифрування - це як JWT токен, в який ми можемо положити корисне навантаження, зашифрувати, а потім розшифрувати і
-дістати потрібну нам інформацію
+version: "3.9"
 
-access token - зазвичай живе 15-30 хв
+services:
+  app:
+    build:
+      context: .
+    env_file:
+      - .env
+#    ports:
+#      - "5555:${PORT}"
+    volumes:
+      - ./dist:/app
+      - /app/node_modules
+    restart: on-failure
+    command: sh -c "node --watch app.js"
+  db:
+    image: mongo
+    env_file:
+      - .env
+    ports:
+      - "27018:27017"
+    volumes:
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js
+      - ./mongo_db:/data/db
+    restart: on-failure
+    web:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    restart: on-failure
+    volumes:
+      - ./client:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      
+      
+$ create file - mongo-init.js
 
-refresh token - від 15 до 60 днів
-
-npm i bcrypt
-
-npm i @types/bcrypt
-
-хешування - це коли ми не можемо дістати інформацію з захешованого пароля наприклад, використовується переважно для 
-паролів
-
-password.service.ts
-````
-import bcrypt from "bcrypt";
-
-import { configs } from "../configs/configs";
-
-class PasswordService {
-  public async hash(password: string): Promise<string> {
-    // hash хешує пароль який ми приймаєио, сіль це те наскільки сильно ми будемо хешувати
-    return bcrypt.hash(password, +configs.SECRET_SALT);
-  }
-  public async compare(
-    password: string,
-    hashedPassword: string
-  ): Promise<boolean> {
-    // compare порівнює звичайний пароль який вводить користувач з тим що в нас є захешований
-    return bcrypt.compare(password, hashedPassword);
-  }
-}
-
-export const passwordService = new PasswordService();
-````
-
-для реєстрації створюємо новий роут auth в app.ts
-````
-app.use("/auth", authRouter);
-````
-далі auth.router.ts
-````
-import { Router } from "express";
-
-import { authController } from "../controllers/auth.controller";
-import { commonMiddleware } from "../middlewares";
-import { UserValidator } from "../validators";
-
-const router = Router();
-
-router.post(
-  "/register",
-  commonMiddleware.isBodyValid(UserValidator.register),
-  authController.register
-);
-router.post("/login", authController.login);
-
-export const authRouter = router;
-Q````
-в auth.controller.ts
-````
-import { NextFunction, Request, Response } from "express";
-
-import { authService } from "../services/auth.service";
-import { ITokensPair } from "../types/token.type";
-
-class AuthController {
-  public async register(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<Response<void>> {
-    try {
-      await authService.register(req.body);
-
-      return res.sendStatus(201);
-    } catch (e) {
-      next(e);
+db.createUser(
+    {
+        user: "user",
+        pwd: "user",
+        roles: [
+            {
+                role: "readWrite",
+                db: "express-help",
+            }
+        ]
     }
-  }
-  public async login(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<Response<ITokensPair>> {
-    try {
-      const tokensPair = await authService.login(
-        req.body,
-        req.res.locals?.user
-      );
+)
+  
+$ connect database - mongoDB - port 27018 - username - password
 
-      return res.status(200).json({ ...tokensPair });
+$ go to directory backend (cd backend) and run npm instal
+
+$ create file - Dockerfile
+
+FROM node:18-alpine
+
+MAINTAINER Some Dev
+
+RUN mkdir /app
+
+COPY backend/package.json /app
+
+WORKDIR /app
+
+RUN npm install --production
+
+$ at app.ts
+
+const dbConnect = async () => {
+  let dbCon = false;
+
+  while (!dbCon){
+    try{
+      console.log("Connecting to database")
+      await mongoose.connect(configs.DB_URL);
+      dbCon = true
     } catch (e) {
-      next(e);
+      console.log("Database unavailable, wait 3 seconds");
+      await new Promise(resolve => setTimeout(resolve, 3000))
     }
   }
 }
 
-export const authController = new AuthController();
-````
-в token.service.ts
-````
-import * as jwt from "jsonwebtoken";
-import { Types } from "mongoose";
-
-import { configs } from "../configs/configs";
-import { ITokensPair } from "../types/token.type";
-
-class TokenService {
-  // Record Створює тип об’єкта, ключі властивостей якого дорівнюють першому значенню до коми, а значення властивостей
-  // другому після коми
-  public generateTokenPair(
-    payLoad: Record<string, string | number | Types.ObjectId>
-  ): ITokensPair {
-    // sign просто генерує токен, приймає корисне навантаження (інфу що ми хочемо зашифрувати в токені, не
-    // передавати важливу), та сикретне слово, і останє це опції, в даному випадку час життя токенів, секретне слово
-    // обовязково виносити в .env
-    const accessToken = jwt.sign(payLoad, configs.JWT_ACCESS_SECRET, {
-      expiresIn: "15m",
-    });
-    const refreshToken = jwt.sign(payLoad, configs.JWT_REFRESH_SECRET, {
-      expiresIn: "30d",
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-    };
+const start = async () => {
+  try{
+  await dbConnect();
+  await app.listen(configs.DB_PORT, () => {
+    console.log(`Server has started on PORT ${configs.DB_PORT}`);
+  });
+  } catch (e) {
+    console.log(e)
   }
 }
 
-export const tokenService = new TokenService();
+start();
 
-````
-в token.type.ts
-````
-import { IUser } from "./user.type";
+$ at tsconfig "outDir": "../dist", add second dot
+$ delete --onSuccess "npm run watch" from script start
 
-export interface ITokensPair {
-  accessToken: string;
-  refreshToken: string;
-}
+$ to run docker - docker compose up --build
 
-export type ICredentials = Pick<IUser, "password" | "email">;
-````
-user.types.ts
-````
-// через Pick вказуємо що ми хочемо взяти з інтерфейсу IUser
-export type ICreateUser = Pick<IUser, "password" | "email">;
-````
-Token.model.ts для зберігання токенів у базі даних
-````
-import { model, Schema, Types } from "mongoose";
+$ create directory client
+$ create file - nginx.conf
 
-import { User } from "./User.model";
+server {
+    listen 80;
+    server_name localhost;
+    index index.html;
+    root /usr/share/nginx/html;
+    client_max_body_size 20M;
 
-const tokensSchema = new Schema(
-  {
-    accessToken: {
-      type: String,
-      require: true,
-    },
-    refreshToken: {
-      type: String,
-      require: true,
-    },
-    // посилання на інші таблиці прийнято починати з "_", це для того щоб ми знали для якого юзера була видана пара
-    // токенів та могли це перевірити
-    _userId: {
-      type: Types.ObjectId,
-      require: true,
-      // зсилаємось на таблицю юзер
-      ref: User,
-    },
-  },
-  {
-    versionKey: false,
-    timestamps: true,
-  }
-);
-
-export const Token = model("Token", tokensSchema);Q
-````
-в auth.service
-````
-import { ApiError } from "../errors";
-import { Token } from "../models/Token.model";
-import { User } from "../models/User.model";
-import { ICredentials, ITokensPair } from "../types/token.type";
-import { ICreateUser, IUser } from "../types/user.type";
-import { passwordService } from "./password.service";
-import { tokenService } from "./token.service";
-
-class AuthService {
-  // Record Створює тип об’єкта, ключі властивостей якого дорівнюють першому значенню до коми, а значення властивостей
-  // другому після коми
-  public async register(data: ICreateUser): Promise<void> {
-    try {
-      const { password } = data;
-
-      const hashedPassword = await passwordService.hash(password);
-
-      await User.create({ ...data, password: hashedPassword });
-    } catch (e) {
-      throw new ApiError(e.message, e.status);
+    location / {
+        try_files $uri$args $uri$args/ /index.html;
     }
-  }
-  public async login(
-    credentials: ICredentials,
-    user: IUser
-  ): Promise<ITokensPair> {
-    try {
-      const user = await User.findOne({ email: credentials.email });
 
-      const isMachced = await passwordService.compare(
-        credentials.password,
-        user.password
-      );
-
-      if (!isMachced) {
-        throw new ApiError("Invalid email or password", 401);
-      }
-
-      const tokensPair = await tokenService.generateTokenPair({
-        _id: user._id,
-      });
-
-      await Token.create({ ...tokensPair, _userId: user._id });
-
-      return tokensPair;
-    } catch (e) {
-      throw new ApiError(e.message, e.status);
+    location /api/ {
+        proxy_pass http://app:5000/;
+        proxy_set_header HOST $host;
+        # for sockets
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
-  }
+
 }
 
-export const authService = new AuthService();
-````
+$ docker restart serviceName - wil restart only one service, like web or app
+$ docker up serviceName - wil start only one service, like web or app
+$ docker stop serviceName - wil stop only one service, like web or app
+```
